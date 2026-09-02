@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardrail: Irreversibility-Aware Action Gating</title>
+<meta name="description" content="Guardrail predicts what an agent action would cost to undo, and interrupts a human only when the expected damage exceeds the cost of asking.">
+<link rel="stylesheet" href="assets/vendor/lenis.css">
+<link rel="stylesheet" href="assets/css/style.css">
+<script>document.documentElement.className = "js";</script>
+</head>
+<body class="is-revealing">
+
+<div class="reveal" id="reveal" aria-hidden="true">
+  <div class="reveal__slices">
+    <span class="reveal__slice"></span>
+    <span class="reveal__slice"></span>
+    <span class="reveal__slice"></span>
+    <span class="reveal__slice"></span>
+  </div>
+  <span class="reveal__mark" id="revealMark">GUARDRAIL</span>
+</div>
+
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav" id="nav">
+  <a class="nav__mark" href="#top">
+    <span class="nav__glyph" aria-hidden="true"></span>
+    <span>GUARDRAIL</span>
+  </a>
+  <nav class="nav__links" aria-label="Sections">
+    <a href="#problem">Problem</a>
+    <a href="#system">System</a>
+    <a href="#gate">Gate</a>
+    <a href="#results">Results</a>
+  </nav>
+  <a class="nav__cta" href="docs/Guardrail_Synopsis_Revised.pdf">Synopsis</a>
+  <button class="nav__burger" id="navBurger" aria-label="Open menu" aria-expanded="false" aria-controls="navPanel">
+    <span></span><span></span>
+  </button>
+</header>
+
+<div class="menu" id="navPanel" hidden>
+  <nav class="menu__links" aria-label="Sections">
+    <a href="#problem">Problem</a>
+    <a href="#system">System</a>
+    <a href="#gate">Gate</a>
+    <a href="#composition">Composition</a>
+    <a href="#results">Results</a>
+    <a href="#integrate">Integrate</a>
+  </nav>
+  <a class="menu__doc" href="docs/Guardrail_Synopsis_Revised.pdf">Read the synopsis</a>
+</div>
+
+<!-- ============================== HERO ============================== -->
+<section class="hero" id="top">
+  <div class="hero__canvas" id="canvas-wrapper"><canvas id="canvas"></canvas></div>
+  <div class="hero__veil" aria-hidden="true"></div>
+
+  <div class="hero__inner shell">
+    <h1 class="hero__title display" data-split>Not every mistake can be undone</h1>
+    <div class="hero__body">
+      <p class="lead" data-fade>An agent that is eighty percent sure about renaming a file and eighty percent sure about authorising a payment gets the same verdict from a confidence gate. Guardrail predicts what the call would cost to undo, and stops for a human only when the expected damage is worth the interruption.</p>
+      <div class="hero__actions" data-fade>
+        <a class="btn btn--solid" href="#system">See the system</a>
+        <a class="btn btn--ghost" href="docs/Guardrail_Synopsis_Revised.pdf">Read the synopsis</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero__foot shell">
+    <dl class="facts">
+      <div class="fact"><dt>14.41%</dt><dd>Best WebArena end-to-end success against a 78.24% human baseline</dd></div>
+      <div class="fact"><dt>4.99M</dt><dd>Average cost in US dollars of a breach, IBM and Ponemon 2026</dd></div>
+      <div class="fact"><dt>92%</dt><dd>Of organisations with an AI-related breach lacked access controls</dd></div>
+    </dl>
+    <div class="hero__cue"><span>Scroll</span><i></i></div>
+  </div>
+</section>
+
+<!-- ============================== MARQUEE ============================== -->
+<div class="marquee" aria-hidden="true">
+  <div class="marquee__track" id="marqueeTrack">
+    <span>DROP TABLE users</span><i></i>
+    <span>refund 12,400.00</span><i></i>
+    <span>git push --force origin main</span><i></i>
+    <span>rm -rf /var/data</span><i></i>
+    <span>send mail to regulator</span><i></i>
+    <span>terraform destroy</span><i></i>
+    <span>delete backup snapshot</span><i></i>
+    <span>revoke api key</span><i></i>
+  </div>
+</div>
+
+<!-- ============================== PROBLEM ============================== -->
+<section class="section" id="problem">
+  <div class="shell">
+    <div class="head">
+      <h2 class="h2" data-split>Confidence and consequence are orthogonal</h2>
+      <p class="lead" data-fade>Every deployed safeguard we know of gates on one number: how sure the model is. That number partitions the action space vertically. Safety needs a horizontal cut. Drag the gate and watch what a confidence threshold can and cannot separate.</p>
+    </div>
+
+    <div class="plot">
+      <div class="plot__left">
+      <div class="plot__stage">
+        <div class="plot__axes">
+          <span class="plot__axis plot__axis--y">Cost to undo</span>
+          <span class="plot__axis plot__axis--x">Model confidence</span>
+        </div>
+        <svg class="plot__svg" id="plotSvg" viewBox="0 0 600 460" preserveAspectRatio="none" aria-hidden="true">
+          <g id="plotGrid"></g>
+          <rect id="plotRegion" x="0" y="0" width="0" height="460" class="plot__region"></rect>
+          <line id="plotLine" x1="0" y1="0" x2="0" y2="460" class="plot__line"></line>
+          <g id="plotPoints"></g>
+        </svg>
+        <div class="plot__grab" id="plotGrab" role="slider" aria-label="Gate threshold" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0"></div>
+      </div>
+      <input class="plot__range" id="plotRange" type="range" min="2" max="98" value="50" aria-label="Gate threshold">
+      </div>
+
+      <div class="plot__side">
+        <div class="switch" id="plotSwitch" role="tablist">
+          <button class="switch__btn is-on" data-mode="confidence" role="tab" aria-selected="true">Confidence gate</button>
+          <button class="switch__btn" data-mode="consequence" role="tab" aria-selected="false">Guardrail</button>
+        </div>
+
+        <dl class="readout">
+          <div class="readout__row"><dt>Irreversible calls let through</dt><dd id="plotMissed">0</dd></div>
+          <div class="readout__row"><dt>Safe calls interrupted</dt><dd id="plotNoise">0</dd></div>
+          <div class="readout__row"><dt>Gate position</dt><dd id="plotThresh">50</dd></div>
+        </dl>
+
+        <p class="note" id="plotNote">Raise the threshold to protect the transfer and you buy approval requests for thousands of harmless file operations. Lower it to keep the agent useful and the transfer goes through unguarded. No vertical line separates the two populations.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== SYSTEM ============================== -->
+<section class="section section--rule" id="system">
+  <div class="shell">
+    <div class="head">
+      <h2 class="h2" data-split>Every tool call passes through three components</h2>
+      <p class="lead" data-fade>Guardrail sits between the agent and its tools, at the function-call boundary that all mainstream frameworks share and at the Model Context Protocol transport. Nothing about the agent changes.</p>
+    </div>
+
+    <div class="pipe" id="pipe">
+      <div class="pipe__rail"><span class="pipe__fill" id="pipeFill"></span></div>
+      <div class="pipe__token" id="pipeToken"><span>db.dropTable("users")</span></div>
+
+      <div class="pipe__stages">
+        <article class="stage" data-stage="0">
+          <span class="stage__n">01</span>
+          <h3 class="h3">Intercept</h3>
+          <p>The proposed call is held before execution. The tool name, arguments, destructive flags, wildcard scope and target sensitivity are read off the call itself.</p>
+          <div class="stage__meter"><span></span></div>
+        </article>
+        <article class="stage" data-stage="1">
+          <span class="stage__n">02</span>
+          <h3 class="h3">Undo-cost regressor</h3>
+          <p>An asymmetric quantile loss makes under-prediction expensive. Split conformal calibration turns the estimate into a distribution-free interval, and the policy consumes the upper bound.</p>
+          <div class="stage__meter"><span></span></div>
+        </article>
+        <article class="stage" data-stage="2">
+          <span class="stage__n">03</span>
+          <h3 class="h3">Silent-irreversibility detector</h3>
+          <p>A contextual head reads trajectory history. A compositional head tracks which recovery affordances remain, so a call that removes the last one is amplified even when it looks cheap.</p>
+          <div class="stage__meter"><span></span></div>
+        </article>
+        <article class="stage" data-stage="3">
+          <span class="stage__n">04</span>
+          <h3 class="h3">Escalation policy</h3>
+          <p>Thresholds are learned per action class against realised cost, under a bounded interruption rate. The verdict is execute, or hand it to a person.</p>
+          <div class="stage__meter"><span></span></div>
+        </article>
+      </div>
+    </div>
+
+    <div class="formula" data-fade>
+      <span class="formula__part">P<sub>err</sub></span>
+      <span class="formula__op">&times;</span>
+      <span class="formula__part">U(a, s, h)</span>
+      <span class="formula__op">&gt;</span>
+      <span class="formula__part">C<sub>int</sub></span>
+      <p class="formula__cap">Escalate when the expected damage of proceeding exceeds the certain cost of pausing. The threshold is a function of the action, not a constant.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== GATE ============================== -->
+<section class="section" id="gate">
+  <div class="shell">
+    <div class="head">
+      <h2 class="h2" data-split>Four calls, one rule</h2>
+      <p class="lead" data-fade>Undo cost decomposes into recovery latency, monetary exposure and social exposure. Only the first two can be measured by executing a rollback in the sandbox. The third is assigned from the externality axis and is reported as an assumption, not a measurement.</p>
+    </div>
+
+    <div class="sim">
+      <div class="sim__list" id="simList" role="tablist" data-lenis-prevent></div>
+
+      <div class="sim__panel">
+        <div class="sim__call">
+          <code id="simCall">agent.tool.call()</code>
+          <span class="sim__ctx" id="simCtx">context</span>
+        </div>
+
+        <div class="bars" id="simBars">
+          <div class="bar" data-k="lat"><span class="bar__k">Recovery latency</span><span class="bar__t"><i></i></span><span class="bar__v">0</span></div>
+          <div class="bar" data-k="mon"><span class="bar__k">Monetary exposure</span><span class="bar__t"><i></i></span><span class="bar__v">0</span></div>
+          <div class="bar" data-k="soc"><span class="bar__k">Social exposure</span><span class="bar__t"><i></i></span><span class="bar__v">0</span></div>
+        </div>
+
+        <div class="scale">
+          <div class="scale__side">
+            <span class="scale__lab">Expected damage</span>
+            <span class="scale__num" id="simDamage">0</span>
+            <span class="scale__sub" id="simMath">P_err 0.00 x U 0</span>
+          </div>
+          <div class="scale__beam"><i id="simBeam"></i></div>
+          <div class="scale__side scale__side--r">
+            <span class="scale__lab">Interruption cost</span>
+            <span class="scale__num" id="simCint">0</span>
+            <span class="scale__sub">C_int at this point in the trajectory</span>
+          </div>
+        </div>
+
+        <div class="verdict" id="simVerdict" data-v="execute">
+          <span class="verdict__dot"></span>
+          <span class="verdict__txt">EXECUTE</span>
+          <span class="verdict__why" id="simWhy">Below threshold. The call proceeds and is written to the audit log.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== COMPOSITION ============================== -->
+<section class="section section--rule" id="composition">
+  <div class="compose-pin" id="composePin">
+    <div class="shell">
+      <div class="head head--pin">
+        <h2 class="h2" data-split>Two reversible actions, one irreversible state</h2>
+        <p class="lead" data-fade>Take the same two calls in three arrangements. On their own, each one leaves a way back. Run them in sequence and there is no way back at all, even though neither call changed.</p>
+      </div>
+
+      <div class="compose" id="compose">
+        <article class="sc" data-sc="0">
+          <div class="sc__head">
+            <span class="sc__n">A</span>
+            <div>
+              <h3 class="h3">Delete the backup</h3>
+              <code class="sc__call">fs.delete(backup)</code>
+            </div>
+          </div>
+
+          <div class="sc__copies">
+            <div class="copy" data-copy="primary">
+              <span class="copy__k">PRIMARY</span>
+              <span class="copy__bar"><i></i></span>
+              <span class="copy__s">holds the data</span>
+            </div>
+            <div class="copy" data-copy="backup">
+              <span class="copy__k">BACKUP</span>
+              <span class="copy__bar"><i></i></span>
+              <span class="copy__s">holds the data</span>
+            </div>
+          </div>
+
+          <div class="sc__out">
+            <svg class="sc__arrow" viewBox="0 0 160 24" aria-hidden="true">
+              <line class="sc__line" x1="4" y1="12" x2="140" y2="12"></line>
+              <polyline class="sc__tip" points="132,6 142,12 132,18"></polyline>
+              <g class="sc__cross"><line x1="64" y1="4" x2="88" y2="20"></line><line x1="88" y1="4" x2="64" y2="20"></line></g>
+            </svg>
+            <span class="sc__note">Restored from the primary, which still holds the data</span>
+          </div>
+
+          <div class="sc__v" data-v="ok"><span></span>REVERSIBLE</div>
+        </article>
+        <article class="sc" data-sc="1">
+          <div class="sc__head">
+            <span class="sc__n">B</span>
+            <div>
+              <h3 class="h3">Overwrite the primary</h3>
+              <code class="sc__call">db.write(primary)</code>
+            </div>
+          </div>
+
+          <div class="sc__copies">
+            <div class="copy" data-copy="primary">
+              <span class="copy__k">PRIMARY</span>
+              <span class="copy__bar"><i></i></span>
+              <span class="copy__s">holds the data</span>
+            </div>
+            <div class="copy" data-copy="backup">
+              <span class="copy__k">BACKUP</span>
+              <span class="copy__bar"><i></i></span>
+              <span class="copy__s">holds the data</span>
+            </div>
+          </div>
+
+          <div class="sc__out">
+            <svg class="sc__arrow" viewBox="0 0 160 24" aria-hidden="true">
+              <line class="sc__line" x1="4" y1="12" x2="140" y2="12"></line>
+              <polyline class="sc__tip" points="132,6 142,12 132,18"></polyline>
+              <g class="sc__cross"><line x1="64" y1="4" x2="88" y2="20"></line><line x1="88" y1="4" x2="64" y2="20"></line></g>
+            </svg>
+            <span class="sc__note">Restored from the backup, which still holds the data</span>
+          </div>
+
+          <div class="sc__v" data-v="ok"><span></span>REVERSIBLE</div>
+        </article>
+        <article class="sc" data-sc="2">
+          <div class="sc__head">
+            <span class="sc__n">C</span>
+            <div>
+              <h3 class="h3">Delete the backup, then overwrite the primary</h3>
+              <code class="sc__call">fs.delete(backup) &rarr; db.write(primary)</code>
+            </div>
+          </div>
+
+          <div class="sc__copies">
+            <div class="copy" data-copy="primary">
+              <span class="copy__k">PRIMARY</span>
+              <span class="copy__bar"><i></i></span>
+              <span class="copy__s">holds the data</span>
+            </div>
+            <div class="copy" data-copy="backup">
+              <span class="copy__k">BACKUP</span>
+              <span class="copy__bar"><i></i></span>
+              <span class="copy__s">holds the data</span>
+            </div>
+          </div>
+
+          <div class="sc__out">
+            <svg class="sc__arrow" viewBox="0 0 160 24" aria-hidden="true">
+              <line class="sc__line" x1="4" y1="12" x2="140" y2="12"></line>
+              <polyline class="sc__tip" points="132,6 142,12 132,18"></polyline>
+              <g class="sc__cross"><line x1="64" y1="4" x2="88" y2="20"></line><line x1="88" y1="4" x2="64" y2="20"></line></g>
+            </svg>
+            <span class="sc__note">Nothing left to restore from</span>
+          </div>
+
+          <div class="sc__v" data-v="bad"><span></span>IRREVERSIBLE</div>
+        </article>
+      </div>
+
+      <p class="compose__close" id="composeClose">Each call is scored cheap on its own, and correctly so. Guardrail carries which recovery paths are still standing, so the second call is priced against a world in which the first one already happened. A rule list, scoring every call in isolation, passes all three of these.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== RESULTS ============================== -->
+<section class="section" id="results">
+  <div class="shell">
+    <div class="head">
+      <h2 class="h2" data-split>The claim is dominance, not accuracy</h2>
+      <p class="lead" data-fade>Sweep every policy across its full threshold range under an equal tuning budget and plot irreversible-error rate against interruption frequency. The result under test is a region of that plane that a confidence threshold cannot reach at any setting.</p>
+    </div>
+
+    <div class="chart">
+      <div class="chart__plot">
+        <svg viewBox="0 0 640 420" class="chart__svg" id="chartSvg">
+          <g id="chartGrid"></g>
+          <path id="chartArea" class="chart__area" d=""></path>
+          <path id="chartB2" class="chart__curve chart__curve--b2" d="M 60 60 C 170 92, 250 190, 330 268 C 400 330, 500 358, 590 366"></path>
+          <path id="chartGR" class="chart__curve chart__curve--gr" d="M 60 42 C 130 60, 168 132, 214 196 C 268 268, 380 322, 590 340"></path>
+          <g id="chartMarks"></g>
+          <text class="chart__lab" x="60" y="404">Fewer interruptions</text>
+          <text class="chart__lab chart__lab--r" x="590" y="404">More interruptions</text>
+        </svg>
+        <span class="chart__ylab">Irreversible-error rate</span>
+        <div class="chart__key">
+          <span class="key key--b2">Confidence gate</span>
+          <span class="key key--gr">Guardrail</span>
+          <span class="key key--ar">Unreachable by any confidence threshold</span>
+        </div>
+      </div>
+
+      <dl class="targets">
+        <div class="target"><dt data-count="40" data-suffix="%">0%</dt><dd>Target reduction in irreversible-error rate at matched interruption frequency, stated as a target rather than a pass threshold</dd></div>
+        <div class="target"><dt data-count="50" data-suffix="%">0%</dt><dd>Target reduction in interruptions per task at matched irreversible-error rate</dd></div>
+        <div class="target"><dt data-count="10000" data-suffix="+">0</dt><dd>Actions in the open dataset, each labelled by executing a rollback and measuring what came back</dd></div>
+        <div class="target"><dt data-count="250" data-suffix="ms">0</dt><dd>Median added latency above which the staged screen is retuned, treated as a design failure</dd></div>
+      </dl>
+    </div>
+
+    <p class="fineprint" data-fade>The primary ablation fixes P<sub>err</sub> at a constant, so gating on consequence alone is isolated from the quality of confidence estimation. If that variant already dominates the confidence baseline, the claim holds independently of how well error probability is estimated.</p>
+  </div>
+</section>
+
+<!-- ============================== INTEGRATION ============================== -->
+<section class="section section--rule" id="integrate">
+  <div class="shell">
+    <div class="head">
+      <h2 class="h2" data-split>Three lines, or none at all</h2>
+      <p class="lead" data-fade>The SDK wraps any tool function at the boundary every framework shares. The protocol proxy needs no code change whatsoever, only an endpoint.</p>
+    </div>
+
+    <div class="code-grid">
+      <figure class="code" data-code>
+        <figcaption>Python SDK</figcaption>
+        <pre><code><span class="c-k">from</span> guardrail <span class="c-k">import</span> gate
+
+<span class="c-d">@gate</span>(budget=<span class="c-n">4</span>, per=<span class="c-n">100</span>)
+<span class="c-k">def</span> <span class="c-f">drop_table</span>(name: <span class="c-t">str</span>) -&gt; <span class="c-t">None</span>:
+    db.execute(<span class="c-s">f"DROP TABLE {name}"</span>)
+
+<span class="c-c"># U upper bound 0.94, P_err 0.31</span>
+<span class="c-c"># expected damage 0.29 &gt; C_int 0.06</span>
+<span class="c-c"># verdict: escalate</span></code></pre>
+      </figure>
+
+      <figure class="code" data-code>
+        <figcaption>Model Context Protocol proxy</figcaption>
+        <pre><code>{
+  <span class="c-a">"mcpServers"</span>: {
+    <span class="c-a">"payments"</span>: {
+      <span class="c-a">"command"</span>: <span class="c-s">"guardrail-proxy"</span>,
+      <span class="c-a">"args"</span>: [<span class="c-s">"--upstream"</span>, <span class="c-s">"payments-mcp"</span>],
+      <span class="c-a">"env"</span>: {
+        <span class="c-a">"GUARDRAIL_BUDGET"</span>: <span class="c-s">"4/100"</span>,
+        <span class="c-a">"GUARDRAIL_REVIEWERS"</span>: <span class="c-s">"oncall"</span>
+      }
+    }
+  }
+}</code></pre>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== FOOTER ============================== -->
+<footer class="footer" id="footer">
+  <div class="footer__canvas" id="app"></div>
+  <div class="footer__veil" aria-hidden="true"></div>
+
+  <div class="footer__inner shell">
+    <div class="footer__top">
+      <h2 class="footer__word display" data-split>GUARDRAIL</h2>
+      <p class="footer__line">Irreversibility-aware action gating for human-in-the-loop control of autonomous agents. Major project, Department of Computer Science and Engineering, ABESEC Ghaziabad, session 2026-27.</p>
+    </div>
+
+    <div class="footer__cols">
+      <div class="footer__col">
+        <h3 class="footer__ch">Documents</h3>
+        <a href="docs/Guardrail_Synopsis_Revised.pdf">Synopsis PDF</a>
+        <a href="docs/Guardrail_Synopsis_Revised.docx">Synopsis DOCX</a>
+        <a href="docs/Guardrail_Synopsis.docx">Long-form draft</a>
+      </div>
+      <div class="footer__col">
+        <h3 class="footer__ch">Sections</h3>
+        <a href="#problem">The orthogonality problem</a>
+        <a href="#system">System</a>
+        <a href="#gate">Gate in action</a>
+        <a href="#results">Results</a>
+      </div>
+      <div class="footer__col">
+        <h3 class="footer__ch">Deliverables</h3>
+        <span>Irreversibility taxonomy</span>
+        <span>Rollback-instrumented sandbox</span>
+        <span>Open undo-cost dataset</span>
+        <span>Proxy, SDK and audit log</span>
+      </div>
+    </div>
+
+    <div class="footer__base">
+      <span>Press and hold anywhere on this panel to speed up</span>
+      <span>Session 2026-27</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/vendor/three.min.js"></script>
+<script src="assets/vendor/postprocessing.min.js"></script>
+<script src="assets/vendor/InfiniteLights.js"></script>
+<script src="assets/vendor/Distortions.js"></script>
+<script src="assets/vendor/instanced-mouse.js"></script>
+<script src="assets/vendor/anime.min.js"></script>
+<script src="assets/vendor/lenis.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>
