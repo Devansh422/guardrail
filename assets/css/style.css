@@ -68,6 +68,9 @@ body{
   -moz-osx-font-smoothing:grayscale;
   overflow-x:hidden;
 }
+/* clip beats hidden here: it cannot become a scroll container, so it will not
+   fight the pinned sections. hidden above stays as the older-browser fallback. */
+@supports (overflow:clip){html,body{overflow-x:clip}}
 
 img,svg,canvas{display:block;max-width:100%}
 a{color:inherit;text-decoration:none}
@@ -105,6 +108,23 @@ body.is-revealing,html:has(body.is-revealing){overflow:hidden}
 }
 .reveal.is-done{display:none}
 
+
+/* ------------------------------------------------- overflow guards ---- */
+/* Grid and flex items default to min-width:auto, so anything holding a long
+   unbreakable string (code, monospace calls) forces the track wider than the
+   viewport. These let the item shrink so its own overflow rule can work.     */
+.plot__left,.plot__side,
+.stage,
+.sim__list,.sim__panel,.sim__call,
+.sc__head,.sc__head > div,.sc__copies,.sc__out,.copy,
+.chart__plot,.targets,.target,
+.code,.code figcaption,
+.fact,.footer__col,
+.formula__cap{min-width:0}
+
+.code pre{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+.sim__call code,.sc__call,.compose__close{max-width:100%;overflow-wrap:anywhere}
+.marquee__track span{max-width:none}
 
 /* --------------------------------------------------------------- type ---- */
 .display{
@@ -615,10 +635,10 @@ body.menu-open{overflow:hidden}
   .formula__cap{min-width:0;flex-basis:100%}
 
   /* case list scrolls sideways instead of stacking four tall cards */
-  .sim__list{flex-direction:row;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+  .sim__list{flex-direction:row;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;overscroll-behavior-x:contain}
   .sim__item{min-width:min(72vw,260px);scroll-snap-align:start}
   .sim__panel{padding:var(--s3);gap:var(--s4)}
-  .sim__call code{font-size:.86rem;word-break:break-all;white-space:normal}
+  .sim__call code{font-size:.86rem;overflow-wrap:anywhere;white-space:normal}
 
   .bar{grid-template-columns:1fr;gap:6px}
   .bar__k{font-size:.7rem}
